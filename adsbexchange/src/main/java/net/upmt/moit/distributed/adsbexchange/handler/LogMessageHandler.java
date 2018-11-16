@@ -28,7 +28,7 @@ public class LogMessageHandler extends ConsumerMessageHandler {
 	@Override
 	public void handleMessage(ConsumerRecord<String, FlightData> record) {
 		// TODO Auto-generated method stub
-		LOGGER.info("Consumed ({}) with offset {}:{}", record.key(), record.offset(), record.value());
+		LOGGER.debug("Consumed ({}) with offset {}:{}", record.key(), record.offset(), record.value());
 	}
 
 }

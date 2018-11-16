@@ -112,6 +112,7 @@ public abstract class SimpleProducer implements Runnable {
 		long totalSize = 0;
 		List<Future<RecordMetadata>> results = new ArrayList<>();
 		for (FlightData flightData : dataList.getAcList()) {
+
 			try {
 				ProducerRecord<String, FlightData> record = buildRecord(getTopic(), flightData);
 				if (record != null) {
@@ -120,7 +121,7 @@ public abstract class SimpleProducer implements Runnable {
 						try {
 							RecordMetadata data = metadata.get();
 							totalSize += data.serializedValueSize();
-							LOGGER.info("Topic({}) - Partition({}) - Offset({}) - Message size({})", data.topic(),
+							LOGGER.debug("Topic({}) - Partition({}) - Offset({}) - Message size({})", data.topic(),
 									data.partition(), data.offset(), data.serializedValueSize());
 						} catch (InterruptedException | ExecutionException e) {
 							LOGGER.error("Error sending message", e);
@@ -186,7 +187,7 @@ public abstract class SimpleProducer implements Runnable {
 		ProducerRecord<String, FlightData> result = null;
 		if (flightData.getIcao() == null || flightData.getIcao().length() == 0 || flightData.getLat() == null
 				|| flightData.getLong() == null) {
-			LOGGER.warn("Discarded:{}", flightData.getIcao());
+			LOGGER.debug("Discarded:{}", flightData.getIcao());
 		} else {
 			result = new ProducerRecord<>(topic, flightData.getIcao(), flightData);
 		}
