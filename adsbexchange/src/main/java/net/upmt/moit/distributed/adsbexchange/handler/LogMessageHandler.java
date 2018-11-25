@@ -17,7 +17,7 @@ import net.upmt.moit.distributed.adsbexchange.model.FlightData;
  * @author ramon
  *
  */
-public class LogMessageHandler extends ConsumerMessageHandler {
+public class LogMessageHandler extends ConsumerMessageHandler<FlightData> {
 
 	final static Logger LOGGER = LoggerFactory.getLogger(ConsumerApp.class);
 

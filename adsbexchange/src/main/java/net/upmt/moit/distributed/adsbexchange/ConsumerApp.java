@@ -16,6 +16,7 @@ import java.util.concurrent.TimeUnit;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import net.rlopezv.miot.kafka.experiment.ConsumerConfig;
 import net.upmt.moit.distributed.adsbexchange.util.Util;
 
 /**
@@ -33,7 +34,7 @@ public class ConsumerApp {
 
 	final static ResourceBundle resourceBundle = ResourceBundle.getBundle("kafka");
 
-	private ExecutorService executor = Executors.newFixedThreadPool(10);
+	private ExecutorService executor = null;
 
 	private Properties config;
 
@@ -91,6 +92,12 @@ public class ConsumerApp {
 		this.config = Util.convertResourceBundleToProperties(ResourceBundle.getBundle("kafka"));
 	}
 
+	public ConsumerApp(int size) {
+		if (size > 0) {
+			executor = Executors.newFixedThreadPool(size);
+		}
+	}
+
 	protected Properties getConfig() {
 		return config;
 	}
@@ -116,4 +123,20 @@ public class ConsumerApp {
 			Thread.currentThread().interrupt();
 		}
 	}
+
+	public SimpleConsumer addConsumer(ConsumerConfig consumerConfig) {
+		SimpleConsumer result = null;
+		try {
+			Class<?> producerClass = Class
+					.forName(this.getConfig().getProperty(consumerConfig.getImplementantionClass() + ".class"));
+			Constructor<?> consumerConstructor = producerClass.getConstructor(String.class);
+			result = (SimpleConsumer) consumerConstructor.newInstance(consumerConfig.getName());
+		} catch (ClassNotFoundException | NoSuchMethodException | SecurityException | InstantiationException
+				| IllegalAccessException | IllegalArgumentException | InvocationTargetException e) {
+			LOGGER.error("Error creating producer", e);
+		}
+		return result;
+
+	}
+
 }

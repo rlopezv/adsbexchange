@@ -10,6 +10,7 @@ import java.nio.file.StandardWatchEventKinds;
 import java.nio.file.WatchEvent;
 import java.nio.file.WatchKey;
 import java.nio.file.WatchService;
+import java.util.Properties;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -29,8 +30,8 @@ public class FileProducer extends SimpleProducer {
 
 	private final Logger LOGGER = LoggerFactory.getLogger(FileProducer.class);
 
-	public FileProducer(String consumerId) {
-		super(consumerId);
+	public FileProducer(String consumerId, Properties config) {
+		super(consumerId, config);
 		this.path = getConfig().getProperty("FILE_PATH");
 
 	}

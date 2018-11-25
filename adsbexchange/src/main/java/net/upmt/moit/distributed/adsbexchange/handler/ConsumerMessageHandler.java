@@ -7,7 +7,6 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 
 import net.upmt.moit.distributed.adsbexchange.SimpleConsumer;
-import net.upmt.moit.distributed.adsbexchange.model.FlightData;
 
 /**
  * Class to implement in order to handle messages
@@ -15,7 +14,7 @@ import net.upmt.moit.distributed.adsbexchange.model.FlightData;
  * @author ramon
  *
  */
-public abstract class ConsumerMessageHandler {
+public abstract class ConsumerMessageHandler<T> {
 
 	private SimpleConsumer consumer;
 
@@ -27,12 +26,12 @@ public abstract class ConsumerMessageHandler {
 		return consumer;
 	}
 
-	public void handleMessages(ConsumerRecords<String, FlightData> consumerRecords) {
-		for (ConsumerRecord<String, FlightData> consumerRecord : consumerRecords) {
+	public void handleMessages(ConsumerRecords<String, T> consumerRecords) {
+		for (ConsumerRecord<String, T> consumerRecord : consumerRecords) {
 			handleMessage(consumerRecord);
 		}
 	}
 
-	public abstract void handleMessage(ConsumerRecord<String, FlightData> record);
+	public abstract void handleMessage(ConsumerRecord<String, T> record);
 
 }

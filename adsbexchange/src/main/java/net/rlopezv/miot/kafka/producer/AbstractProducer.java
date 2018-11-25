@@ -1,4 +1,4 @@
-package net.upmt.moit.distributed.adsbexchange;
+package net.rlopezv.miot.kafka.producer;
 /**
  *
  */
@@ -7,7 +7,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
-import java.util.Properties;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 
@@ -21,43 +20,55 @@ import org.apache.kafka.common.PartitionInfo;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
+import net.rlopezv.miot.kafka.experiment.ProducerConfig;
+import net.rlopezv.miot.kafka.experiment.TopicConfig;
+import net.rlopezv.miot.kafka.producer.callback.LogCallback;
+import net.upmt.moit.distributed.adsbexchange.SimpleProducer;
 
-import net.upmt.moit.distributed.adsbexchange.model.FlightData;
-import net.upmt.moit.distributed.adsbexchange.model.FlightDataList;
-
-public abstract class SimpleProducer implements Runnable {
+/**
+ * 
+ * @author ramon
+ *
+ */
+public abstract class AbstractProducer<T> implements Runnable {
 
 	private final Logger LOGGER = LoggerFactory.getLogger(SimpleProducer.class);
 
-	private KafkaProducer<String, FlightData> producer;
+	private KafkaProducer<String, T> producer;
 	private String clientId;
 	private String topic;
-	private Properties config;
-	private Callback sentCallback = new LogCallback();
+	private ProducerConfig config;
+	private Callback sentCallback = null;
 	private boolean sync = false;
 	private boolean callback = false;
+	private boolean closed = false;
 
 	/**
 	 * Constructor
 	 * 
 	 * @param consumerId, name of the properties file used for configuring it
 	 */
-	public SimpleProducer(String consumerId, Properties config) {
-		LOGGER.info("Creating producer {}:{}", consumerId, config);
-		this.clientId = consumerId;
+	public AbstractProducer(TopicConfig topicConfig, ProducerConfig config) {
+		LOGGER.info("Creating producer {}:{}", config.getName(), config);
+		this.clientId = config.getClientId() == null ? config.getName() : config.getClientId();
 		this.config = config;
-		topic = config.getProperty("topic");
-		sync = !Boolean.valueOf(config.getProperty("commit.async", "true"));
-		callback = Boolean.valueOf(config.getProperty("commit.callback", "false"));
-		this.producer = new KafkaProducer<>(config);
+		topic = topicConfig.getName();
+		sync = config.getCommitAsync();
+		if (config.getCommitCallback()) {
+			setSentCallBack(new LogCallback(LOGGER));
+		}
+		this.producer = new KafkaProducer<>(config.getAdditionalProperties());
+	}
+
+	protected void setSentCallBack(Callback logCallback) {
+		this.sentCallback = logCallback;
 	}
 
 	protected Callback getSentCallback() {
 		return sentCallback;
 	}
 
-	protected KafkaProducer<String, FlightData> getProducer() {
+	protected KafkaProducer<String, T> getProducer() {
 		return producer;
 	}
 
@@ -73,7 +84,7 @@ public abstract class SimpleProducer implements Runnable {
 		return getProducer().partitionsFor(getTopic());
 	}
 
-	protected Properties getConfig() {
+	protected ProducerConfig getConfig() {
 		return config;
 	}
 
@@ -86,50 +97,36 @@ public abstract class SimpleProducer implements Runnable {
 	}
 
 	protected boolean isClosed() {
-		return false;
+		return closed;
 	}
 
 	public abstract void run();
 
-	private class LogCallback implements org.apache.kafka.clients.producer.Callback {
-		@Override
-		public void onCompletion(RecordMetadata data, Exception e) {
-			if (e != null) {
-				LOGGER.error("Error while producing message to topic : {}", data.topic(), e);
-			} else {
-				LOGGER.debug("Topic({}) - Partition({}) - Offset({}) - Message size({})", data.topic(),
-						data.partition(), data.offset(), data.serializedValueSize());
-			}
-		}
-	}
-
-	protected void sendRecords(FlightDataList dataList) {
-		LOGGER.info("Total number of records:{}", dataList.getAcList().size());
+	protected void sendRecords(List<T> data) {
+		LOGGER.info("Total number of records:{}", data.size());
 		long beginTime = System.currentTimeMillis();
 		long endTime = System.currentTimeMillis();
 		long totalSize = 0;
 		List<Future<RecordMetadata>> results = new ArrayList<>();
-		for (FlightData flightData : dataList.getAcList()) {
-
-			try {
-				ProducerRecord<String, FlightData> record = buildRecord(getTopic(), flightData);
-				if (record != null) {
-					Future<RecordMetadata> metadata = send(record);
-					if (isSync()) {
-						try {
-							RecordMetadata data = metadata.get();
-							totalSize += data.serializedValueSize();
-							LOGGER.debug("Topic({}) - Partition({}) - Offset({}) - Message size({})", data.topic(),
-									data.partition(), data.offset(), data.serializedValueSize());
-						} catch (InterruptedException | ExecutionException e) {
-							LOGGER.error("Error sending message", e);
-						}
-					} else {
-						results.add(metadata);
+		for (T datum : data) {
+			ProducerRecord<String, T> record = buildRecord(getTopic(), datum);
+			if (record != null) {
+				Future<RecordMetadata> oMetadata = send(record);
+				if (isSync()) {
+					try {
+						RecordMetadata metadata = oMetadata.get();
+						totalSize += metadata.serializedValueSize();
+						LOGGER.debug("Topic({}) - Partition({}) - Offset({}) - Message size({})", metadata.topic(),
+								metadata.partition(), metadata.offset(), metadata.serializedValueSize());
+					} catch (InterruptedException | ExecutionException e) {
+						LOGGER.error("Error sending message", e);
 					}
+				} else {
+					results.add(oMetadata);
 				}
-			} catch (JsonProcessingException e) {
-				LOGGER.error("Message discarded", e);
+
+			} else {
+				LOGGER.error("Message discarded {}", datum);
 			}
 		}
 		long publishingTime = System.currentTimeMillis();
@@ -137,8 +134,8 @@ public abstract class SimpleProducer implements Runnable {
 		if (results.size() > 0) {
 			for (Future<RecordMetadata> result : results) {
 				try {
-					RecordMetadata data = result.get();
-					totalSize += data.serializedValueSize();
+					RecordMetadata metaData = result.get();
+					totalSize += metaData.serializedValueSize();
 				} catch (InterruptedException | ExecutionException e) {
 					LOGGER.error("Error handling futures", e);
 				}
@@ -150,18 +147,17 @@ public abstract class SimpleProducer implements Runnable {
 		LOGGER.info("Topic:{} - Partitions:{}", getTopic(), getPartitions().size());
 		LOGGER.info("Sync:{}", isSync());
 		LOGGER.info("Begin - End ({},{}):{}", beginTime, endTime, totalTime);
-		LOGGER.info("Records:{}", dataList.getAcList().size());
+		LOGGER.info("Records:{}", data.size());
 		LOGGER.info("Size:{}", totalSize);
 		LOGGER.info("THroughput Mb/s:{}", ((float) totalSize / totalTime) / 1000);
-		LOGGER.info("THroughput msg/s:{}", ((float) dataList.getAcList().size() / totalTime) * 1000);
+		LOGGER.info("THroughput msg/s:{}", ((float) data.size() / totalTime) * 1000);
 //		LOGGER.info("{},{},{},{}", records, size, ((double) size / totalTime) * 1000,
 //				((double) records / totalTime) * 1000);
 		LOGGER.info("************************************************");
-
-		LOGGER.info("Total number of records sent:{}", dataList.getAcList().size());
+		LOGGER.info("Total number of records sent:{}", data.size());
 	}
 
-	protected Future<RecordMetadata> send(ProducerRecord<String, FlightData> record) {
+	protected Future<RecordMetadata> send(ProducerRecord<String, T> record) {
 		Future<RecordMetadata> result = null;
 		try {
 			// LOGGER.debug("Sending message ({}):{}", getClientId(), record.key());
@@ -180,17 +176,22 @@ public abstract class SimpleProducer implements Runnable {
 		return result;
 	}
 
-	protected ProducerRecord<String, FlightData> buildRecord(String topic, FlightData flightData)
-			throws JsonProcessingException {
-		ProducerRecord<String, FlightData> result = null;
-		if (flightData.getIcao() == null || flightData.getIcao().length() == 0 || flightData.getLat() == null
-				|| flightData.getLong() == null) {
-			LOGGER.debug("Discarded:{}", flightData.getIcao());
-		} else {
-			result = new ProducerRecord<>(topic, flightData.getIcao(), flightData);
-		}
+	protected abstract ProducerRecord<String, T> buildRecord(String topic, T flightData);
 
-		return result;
+//	protected ProducerRecord<String, T> buildRecord(String topic, T flightData) throws JsonProcessingException {
+//		ProducerRecord<String, T> result = null;
+//		if (flightData.getIcao() == null || flightData.getIcao().length() == 0 || flightData.getLat() == null
+//				|| flightData.getLong() == null) {
+//			LOGGER.debug("Discarded:{}", flightData.getIcao());
+//		} else {
+//			result = new ProducerRecord<>(topic, flightData.getIcao(), flightData);
+//		}
+//
+//		return result;
+//	}
+
+	protected void setClosed(boolean closed) {
+		this.closed = closed;
 	}
 
 	public void close() {

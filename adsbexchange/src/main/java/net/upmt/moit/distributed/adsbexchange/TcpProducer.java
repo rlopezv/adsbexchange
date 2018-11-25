@@ -6,6 +6,7 @@ import java.io.InputStreamReader;
 import java.net.InetAddress;
 import java.net.Socket;
 import java.net.UnknownHostException;
+import java.util.Properties;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -23,8 +24,8 @@ public class TcpProducer extends SimpleProducer {
 	private int port;
 	ObjectMapper mapper = new ObjectMapper();
 
-	public TcpProducer(String consumerId) {
-		super(consumerId);
+	public TcpProducer(String consumerId, Properties config) {
+		super(consumerId, config);
 		this.address = getConfig().getProperty("TCP_SOURCE_ADDRESS");
 		this.port = Integer.valueOf(getConfig().getProperty("TCP_SOURCE_PORT", "32005"));
 

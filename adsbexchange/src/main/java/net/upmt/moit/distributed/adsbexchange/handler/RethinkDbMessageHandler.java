@@ -24,7 +24,7 @@ import net.upmt.moit.distributed.adsbexchange.model.FlightData;
  * @author ramon
  *
  */
-public class RethinkDbMessageHandler extends ConsumerMessageHandler {
+public class RethinkDbMessageHandler extends ConsumerMessageHandler<FlightData> {
 
 	final static Logger LOGGER = LoggerFactory.getLogger(ConsumerApp.class);
 

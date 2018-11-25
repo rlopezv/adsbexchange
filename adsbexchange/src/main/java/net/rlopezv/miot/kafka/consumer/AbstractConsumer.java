@@ -1,7 +1,7 @@
+package net.rlopezv.miot.kafka.consumer;
 /**
  *
  */
-package net.upmt.moit.distributed.adsbexchange;
 
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
@@ -11,7 +11,6 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
-import java.util.Properties;
 import java.util.Set;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -25,51 +24,54 @@ import org.apache.kafka.common.TopicPartition;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import net.rlopezv.miot.kafka.AppConstants;
+import net.rlopezv.miot.kafka.experiment.ConsumerConfig;
+import net.rlopezv.miot.kafka.experiment.TopicConfig;
+import net.upmt.moit.distributed.adsbexchange.SimpleConsumer;
+import net.upmt.moit.distributed.adsbexchange.SimpleProducer;
 import net.upmt.moit.distributed.adsbexchange.handler.ConsumerMessageHandler;
-import net.upmt.moit.distributed.adsbexchange.model.FlightData;
 
 /**
+ * 
  * @author ramon
  *
  */
-public class SimpleConsumer implements Runnable {
+public abstract class AbstractConsumer<T> implements Runnable {
 
-	public static final String PARTITIONS = "partitions";
-
-	private static final Logger LOGGER = LoggerFactory.getLogger(SimpleConsumer.class);
+	private final Logger LOGGER = LoggerFactory.getLogger(SimpleProducer.class);
 
 	private String clientId;
 	private String topic = null;
-	private KafkaConsumer<String, FlightData> consumer;
-	private Properties config;
+	private KafkaConsumer<String, T> consumer;
+	private ConsumerConfig config;
 	private OffsetCommitCallback commitCallback;
 	private boolean sync = false;
 	private boolean callback = false;
-	private ConsumerMessageHandler messageHandler;
+	private ConsumerMessageHandler<T> messageHandler;
 
 	/**
 	 * Constructor
 	 * 
 	 * @param consumerId, name of the properties file used for configuring it
 	 */
-	public SimpleConsumer(String consumerId, Properties config) {
-		LOGGER.info("Creating consumer {}:{}", consumerId, config);
+	public AbstractConsumer(TopicConfig topicConfig, ConsumerConfig config) {
+		LOGGER.info("Creating consumer {}:{}", config.getName(), config);
 		this.config = config;
-		this.clientId = consumerId;
-		topic = config.getProperty("topic", "");
-		sync = Boolean.valueOf(config.getProperty("commit.async", "true"));
-		callback = Boolean.valueOf(config.getProperty("commit.callback", "false"));
-		this.consumer = new KafkaConsumer<>(config);
+		this.clientId = config.getName();
+		topic = config.getTopic();
+		// sync = Boolean.valueOf(config.getProperty("commit.async", "true"));
+		// callback = Boolean.valueOf(config.getProperty("commit.callback", "false"));
+		this.consumer = new KafkaConsumer<>(config.getAdditionalProperties());
 		this.messageHandler = buildMessageHandler(this);
 	}
 
-	private ConsumerMessageHandler buildMessageHandler(SimpleConsumer simpleConsumer) {
-		ConsumerMessageHandler result = null;
+	private ConsumerMessageHandler<T> buildMessageHandler(AbstractConsumer<T> simpleConsumer) {
+		ConsumerMessageHandler<T> result = null;
 		try {
-			Class<?> handlerClass = Class.forName(getConfig().getProperty("handler.class",
+			Class<?> handlerClass = Class.forName(getConfig().getProperty("handler.class", String.class,
 					"net.upmt.moit.distributed.adsbexchange.handler.LogMessageHandler"));
 			Constructor<?> handlerConstructor = handlerClass.getConstructor(SimpleConsumer.class);
-			result = (ConsumerMessageHandler) handlerConstructor.newInstance(simpleConsumer);
+			result = (ConsumerMessageHandler<T>) handlerConstructor.newInstance(simpleConsumer);
 		} catch (ClassNotFoundException | NoSuchMethodException | SecurityException | InstantiationException
 				| IllegalAccessException | IllegalArgumentException | InvocationTargetException e) {
 			LOGGER.error("Error creating handler", e);
@@ -101,13 +103,13 @@ public class SimpleConsumer implements Runnable {
 		return topic;
 	}
 
-	protected KafkaConsumer<String, FlightData> getConsumer() {
+	protected KafkaConsumer<String, T> getConsumer() {
 		return consumer;
 	}
 
 	protected List<TopicPartition> getPartitions() {
 		List<TopicPartition> partitions = null;
-		String confPartitions = config.getProperty(PARTITIONS);
+		String confPartitions = getConfig().getProperty(AppConstants.PARTITIONS, String.class);
 		if (confPartitions != null) {
 			String[] partitionList = confPartitions.split(",");
 			for (String partitionId : partitionList) {
@@ -121,7 +123,7 @@ public class SimpleConsumer implements Runnable {
 		return partitions;
 	}
 
-	public Properties getConfig() {
+	public ConsumerConfig getConfig() {
 		return config;
 	}
 
@@ -148,8 +150,8 @@ public class SimpleConsumer implements Runnable {
 		// Checking it has subscribers
 		while (!getConsumer().subscription().isEmpty() || !getConsumer().assignment().isEmpty()) {
 			// Poll time measured in advance.
-			ConsumerRecords<String, FlightData> consumerRecords = getConsumer()
-					.poll(Duration.ofMillis(Long.parseLong(config.getProperty("poll.time", "1000"))));
+			ConsumerRecords<String, T> consumerRecords = getConsumer()
+					.poll(Duration.ofMillis(getConfig().getProperty("poll.time", Long.class, 1000L)));
 
 			if (!consumerRecords.isEmpty()) {
 				LOGGER.info("({}) Records found: {}", getClientId(), consumerRecords.count());
@@ -171,7 +173,7 @@ public class SimpleConsumer implements Runnable {
 		}
 	}
 
-	public void setConfig(Properties config) {
+	public void setConfig(ConsumerConfig config) {
 		this.config = config;
 	}
 
@@ -180,8 +182,8 @@ public class SimpleConsumer implements Runnable {
 	 * 
 	 * @param consumerRecords
 	 */
-	private void handleRecords(ConsumerRecords<String, FlightData> consumerRecords) {
-		for (ConsumerRecord<String, FlightData> record : consumerRecords) {
+	private void handleRecords(ConsumerRecords<String, T> consumerRecords) {
+		for (ConsumerRecord<String, T> record : consumerRecords) {
 			getMessageHandler().handleMessage(record);
 		}
 	}

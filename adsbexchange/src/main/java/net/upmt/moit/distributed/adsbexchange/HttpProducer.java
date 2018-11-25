@@ -4,6 +4,7 @@
 package net.upmt.moit.distributed.adsbexchange;
 
 import java.io.IOException;
+import java.util.Properties;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -29,8 +30,8 @@ public class HttpProducer extends SimpleProducer {
 
 	private final Logger LOGGER = LoggerFactory.getLogger(HttpProducer.class);
 
-	public HttpProducer(String consumerId) {
-		super(consumerId);
+	public HttpProducer(String consumerId, Properties config) {
+		super(consumerId, config);
 		this.url = getConfig().getProperty("SOURCE_URL");
 		this.pollms = Long.valueOf(getConfig().getProperty("POLL_TIME", "100"));
 		this.client = new OkHttpClient();

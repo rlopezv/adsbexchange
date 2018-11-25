@@ -1,0 +1,38 @@
+{
+  "name": "experimentName",
+  "environment": {
+    "zookeeperHost":"localhost:12181",
+    "sessionTimeoutMs":30000,
+    "connectionTimeoutMs": 30000,
+    "maxInFlightRequests": 30000,
+    "metricGroup": "metricGroup",
+    "metricType": "",
+    "consumerThreadNumber":10,
+    "producerThreadNumber":10
+  },
+  "topics" : [{
+    "name":"topicName",
+    "partitions": 1,
+    "replicationFactor":1
+    }  
+  ],
+  "producers": [
+    {
+      "name":"producerName",
+      "implementantionClass":"net.rlopezv.miot.kafka.producer.DummyProducer",
+      "topic": "topicName",
+      "additionalProperties": 
+            {"bootstrap.servers":"localhost:19092",
+             "key.serializer" : "org.apache.kafka.common.serialization.StringSerializer",
+             "value.serializer": "org.apache.kafka.common.serialization.StringSerializer",
+             "executions" : 10 
+            }
+    }
+  ],
+  "consumers": [
+    {
+      "name":"consumerName",
+      "implementantionClass":"class"
+    }
+  ]
+}
